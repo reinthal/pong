@@ -1,13 +1,14 @@
+use std::{fs::File, io::Write};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Position, Rect},
+    layout::{Alignment, Rect},
     style::{Color, Style, Stylize},
     symbols::border,
     symbols::Marker,
     text::{Line, Span, Text},
     widgets::{
-        canvas::{Canvas, Circle},
+        canvas::{Canvas, Circle, Rectangle},
         Block, Paragraph, Widget,
     },
     DefaultTerminal, Frame,
@@ -29,17 +30,23 @@ pub enum Direction {
 }
 
 pub struct Player {
-    pub y: u32,
+    pub paddle: Rectangle,
     pub lifes: u32,
     pub direction: Direction,
 }
 
 impl Player {
-    pub fn new() -> Player {
+    pub fn new(x: f64, color: Color) -> Player {
         Player {
-            y: 50,
             lifes: 3,
             direction: Direction::Na,
+            paddle: Rectangle {
+                x,
+                y: 10.0,
+                width: 3.0,
+                height: 20.0,
+                color
+            }
         }
     }
 }
@@ -61,10 +68,13 @@ pub struct App {
     vy: f64,
     pub p1: Player,
     pub p2: Player,
+    pub logfile: File,
 }
 
 impl App {
+    
     pub fn new() -> App {
+        let logfile = File::create("app_log.txt").expect("could not open file");
         App {
             playground: Rect::new(0, 0, 200, 100),
             vx: 1.0,
@@ -72,16 +82,17 @@ impl App {
             ball: Circle {
                 x: 10.0,
                 y: 10.0,
-                radius: 10.0,
-                color: Color::Yellow,
+                radius: 5.0,
+                color: Color::Cyan,
             },
             tick_count: 0,
             marker: Marker::Dot,
             current_screen: CurrentScreen::StartMenu,
             current_selection: Some(CurrentSelection::NewGame),
             exit: false,
-            p1: Player::new(),
-            p2: Player::new(),
+            p1: Player::new(10.0,Color::Yellow),
+            p2: Player::new(190.0,Color::Green),
+            logfile,
         }
     }
 
@@ -91,6 +102,23 @@ impl App {
 
     fn on_tick(&mut self) {
         self.tick_count += 1;
+
+        if self.current_screen == CurrentScreen::StartMenu {
+            return;
+        }
+        assert!(self.current_screen == CurrentScreen::InGame);
+        // Move Paddles
+        match self.p1.direction {
+            Direction::Down => self.p1.paddle.y = f64::max(self.p1.paddle.y - 1.0, 0.0),
+            Direction::Up => self.p1.paddle.y = f64::min(self.p1.paddle.y + 1.0, 100.0 - self.p1.paddle.height),
+            Direction::Na => (),
+        }
+
+        match self.p2.direction {
+            Direction::Down => self.p2.paddle.y = f64::max(self.p2.paddle.y - 1.0, 0.0),
+            Direction::Up => self.p2.paddle.y = f64::min(self.p2.paddle.y + 1.0, 100.0 - self.p2.paddle.height),
+            Direction::Na => (),
+        }
 
         // bounce the ball by flipping the velocity vector
         let ball = &self.ball;
@@ -133,9 +161,11 @@ impl App {
             // it's important to check that the event is a key press event as
             // crossterm also emits key release and repeat events on Windows.
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                self.logfile.write_all(b"Press event happened!\n")?;
                 self.handle_key_event(key_event)
             }
             Event::Key(key_event) if key_event.kind == KeyEventKind::Release => {
+                self.logfile.write_all(b"Release event happened!\n")?;
                 self.handle_key_release_event(key_event)
             }
             _ => {}
@@ -259,10 +289,16 @@ impl App {
 
     fn render_game(&self, area: Rect, buf: &mut Buffer) {
         // 1. Create the block that surrounds the game area
+        let instructions = Line::from(vec!["Main Menu:".into(), "<q>".blue().bold()]);
+        let instructions_p1 = Line::from(vec![" Move:".into(), "<w>/<s>".yellow().bold()]);
+        let instructions_p2 = Line::from(vec![" Move:".into(), "<Up>/<Down>".green().bold()]);
         let block = Block::bordered()
-            .title(Line::from("PONG").centered())
-            .border_set(border::THICK);
-
+        .title(Line::from("PONG").centered())
+        .title_bottom(instructions_p1.left_aligned())
+        .title_bottom(instructions_p2.right_aligned())
+        .title_bottom(instructions.centered())
+        .border_set(border::THICK);
+    
         // 2. Split the game's renderable area by accounting for the block's margins
         let inner_area = block.inner(area); // The area inside the bordered block
 
@@ -282,6 +318,9 @@ impl App {
             .marker(self.marker)
             .paint(|ctx| {
                 ctx.draw(&self.ball); // Draw the ball at its current position
+                ctx.draw(&self.p1.paddle);
+                ctx.draw(&self.p2.paddle);
+
             })
             .x_bounds(x_bounds)
             .y_bounds(y_bounds);

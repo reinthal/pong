@@ -66,6 +66,17 @@ impl App {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Up => self.handle_direction_event(),
             KeyCode::Down => self.handle_direction_event(),
+            KeyCode::Enter => self.handle_selection_event(),
+            _ => {}
+        }
+    }
+    fn handle_selection_event(&mut self) {
+        match self.current_selection {
+            Some(CurrentSelection::NewGame) => self.current_screen = CurrentScreen::InGame,
+            Some(CurrentSelection::Exit) => {
+                self.current_selection = None;
+                self.exit();
+            },
             _ => {}
         }
     }
@@ -81,17 +92,14 @@ impl App {
         self.exit = true;
     }
 
-}
-
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+    fn render_main_menu(&self, area: Rect, buf: &mut Buffer) {
         let title = Line::from(" PONG ".bold());
         let instructions = Line::from(vec![
             " Move: ".into(),
             "<Up>/<Down>".blue().bold(),
             " Choose: ".into(),
             "<Enter>".blue().bold(),
-            " Quit ".into(),
+            " Quit: ".into(),
             "<Q> ".blue().bold(),
         ]);
         let block = Block::bordered()
@@ -99,7 +107,7 @@ impl Widget for &App {
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
         let mut lines = vec![];
-
+    
         lines.push(Line::from(vec![
             Span::raw(if matches!(self.current_selection, Some(CurrentSelection::NewGame)) {
                 "◉ "
@@ -108,7 +116,7 @@ impl Widget for &App {
             }),
             Span::styled("New Game", Style::default().fg(Color::Yellow)),
         ]));
-
+    
         // Dynamically style "Exit"
         lines.push(Line::from(vec![
             Span::raw(if matches!(self.current_selection, Some(CurrentSelection::Exit)) {
@@ -118,13 +126,55 @@ impl Widget for &App {
             }),
             Span::styled("Exit", Style::default().fg(Color::Yellow)),
         ]));
-
+    
         let main_menu = Text::from(lines);
-
+    
         Paragraph::new(main_menu)
             .alignment(Alignment::Center)
             .centered()
             .block(block)
             .render(area, buf);
+    }
+
+    fn render_game(&self, area: Rect, buf: &mut Buffer) {
+        let title = Line::from("In Game");
+        let instructions = Line::from(
+            vec![
+                " Quit:".into(),
+                "<q>".blue().bold()
+            ]
+        );
+        let instructions_p1 = Line::from(vec![
+            " Move:".into(),
+            "<w>/<s>".yellow().bold() 
+        ]);
+        let instructions_p2 = Line::from(vec![
+            " Move:".into(),
+            "<Up>/<Down>".green().bold() 
+        ]);
+        let block = Block::bordered()
+            .title(title.centered())
+            .title_bottom(instructions_p1.left_aligned())
+            .title_bottom(instructions_p2.right_aligned())
+            .title_bottom(instructions.centered())
+            .border_set(border::THICK);
+        let play_area  = Text::from(vec![Line::from("This is the play area")]);
+        Paragraph::new(play_area)
+        .alignment(Alignment::Center)
+        .centered()
+        .block(block)
+        .render(area, buf);
+        
+    }
+
+}
+ 
+impl Widget for &App {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        match self.current_screen {
+            CurrentScreen::InGame => self.render_game(area, buf),
+            CurrentScreen::StartMenu => self.render_main_menu(area, buf),
+        }
+        
     }
 }

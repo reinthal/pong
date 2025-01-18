@@ -1,18 +1,22 @@
-use crossterm::event::{self, Event};
-use ratatui::{text::Text, Frame};
+mod app;
+use crate::app::{App, CurrentScreen, CurrentSelection};
 
-fn main() {
+use std::io;
+
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::{
+    buffer::Buffer,
+    layout::Rect,
+    style::Stylize,
+    symbols::border,
+    text::{Line, Text},
+    widgets::{Block, Paragraph, Widget},
+    DefaultTerminal, Frame,
+};
+
+fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
-    loop {
-        terminal.draw(draw).expect("failed to draw frame");
-        if matches!(event::read().expect("failed to read event"), Event::Key(_)) {
-            break;
-        }
-    }
+    let app_result = App::new().run(&mut terminal);
     ratatui::restore();
-}
-
-fn draw(frame: &mut Frame) {
-    let text = Text::raw("Hello World!");
-    frame.render_widget(text, frame.area());
+    app_result
 }

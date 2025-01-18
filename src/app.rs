@@ -1,15 +1,20 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Rect},
+    layout::{Alignment, Position, Rect},
     style::{Color, Style, Stylize},
     symbols::border,
+    symbols::Marker,
     text::{Line, Span, Text},
-    widgets::{Block, Paragraph, Widget},
+    widgets::{
+        canvas::{Canvas, Circle, Points, Rectangle},
+        Block, Paragraph, Widget,
+    },
     DefaultTerminal, Frame,
 };
 
 use std::io;
+use std::time::{Duration, Instant};
 
 #[derive(PartialEq)]
 pub enum CurrentScreen {
@@ -45,16 +50,37 @@ pub enum CurrentSelection {
 }
 
 pub struct App {
+    pub tick_count: u64,
+    pub marker: Marker,
     pub current_screen: CurrentScreen,
     pub current_selection: Option<CurrentSelection>,
     pub exit: bool,
+    pub ball: Circle,
+    pub playground: Rect,
+    vx: f64,
+    vy: f64,
+    points: Vec<Position>,
     pub p1: Player,
     pub p2: Player,
+    is_drawing: bool,
 }
 
 impl App {
     pub fn new() -> App {
         App {
+            is_drawing: false,
+            playground: Rect::new(10, 10, 200, 100),
+            vx: 1.0,
+            vy: 1.0,
+            points: vec![],
+            ball: Circle {
+                x: 0.0,
+                y: 0.0,
+                radius: 10.0,
+                color: Color::Yellow,
+            },
+            tick_count: 0,
+            marker: Marker::Dot,
             current_screen: CurrentScreen::StartMenu,
             current_selection: Some(CurrentSelection::NewGame),
             exit: false,
@@ -67,10 +93,25 @@ impl App {
         frame.render_widget(self, frame.area());
     }
 
+    fn on_tick(&mut self) {
+        self.tick_count += 1;
+    }
+
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        let tick_rate = Duration::from_millis(16);
+        let mut last_tick = Instant::now();
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
+
+            let timeout = tick_rate.saturating_sub(last_tick.elapsed());
+            if event::poll(timeout)? {
+                self.handle_events()?;
+            }
+
+            if last_tick.elapsed() >= tick_rate {
+                self.on_tick();
+                last_tick = Instant::now();
+            }
         }
         Ok(())
     }
@@ -232,4 +273,3 @@ impl Widget for &App {
         }
     }
 }
-

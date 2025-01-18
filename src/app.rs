@@ -11,6 +11,7 @@ use ratatui::{
 
 use std::io;
 
+#[derive(PartialEq)]
 pub enum CurrentScreen {
     StartMenu,
     InGame,
@@ -61,9 +62,19 @@ impl App {
         Ok(())
     }
 
+    fn handle_q_event(&mut self) {
+
+        if self.current_screen == CurrentScreen::InGame {
+            self.current_screen = CurrentScreen::StartMenu;
+        }
+        else {
+            self.exit();
+        }
+    }
+
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
-            KeyCode::Char('q') => self.exit(),
+            KeyCode::Char('q') => self.handle_q_event(),
             KeyCode::Up => self.handle_direction_event(),
             KeyCode::Down => self.handle_direction_event(),
             KeyCode::Enter => self.handle_selection_event(),
@@ -137,10 +148,10 @@ impl App {
     }
 
     fn render_game(&self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from("In Game");
+        let title = Line::from("PONG");
         let instructions = Line::from(
             vec![
-                " Quit:".into(),
+                "Main Menu:".into(),
                 "<q>".blue().bold()
             ]
         );

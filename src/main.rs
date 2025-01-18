@@ -1,18 +1,9 @@
 mod app;
-use crate::app::{App, CurrentScreen, CurrentSelection};
+use crate::app::App;
 
 use std::io;
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::Stylize,
-    symbols::border,
-    text::{Line, Text},
-    widgets::{Block, Paragraph, Widget},
-    DefaultTerminal, Frame,
-};
+use ratatui;
 
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
@@ -20,3 +11,4 @@ fn main() -> io::Result<()> {
     ratatui::restore();
     app_result
 }
+

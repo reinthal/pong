@@ -7,7 +7,7 @@ use ratatui::{
     symbols::Marker,
     text::{Line, Span, Text},
     widgets::{
-        canvas::{Canvas, Circle, Points, Rectangle},
+        canvas::{Canvas, Circle},
         Block, Paragraph, Widget,
     },
     DefaultTerminal, Frame,
@@ -59,23 +59,19 @@ pub struct App {
     pub playground: Rect,
     vx: f64,
     vy: f64,
-    points: Vec<Position>,
     pub p1: Player,
     pub p2: Player,
-    is_drawing: bool,
 }
 
 impl App {
     pub fn new() -> App {
         App {
-            is_drawing: false,
-            playground: Rect::new(10, 10, 200, 100),
+            playground: Rect::new(0, 0, 200, 100),
             vx: 1.0,
             vy: 1.0,
-            points: vec![],
             ball: Circle {
-                x: 0.0,
-                y: 0.0,
+                x: 10.0,
+                y: 10.0,
                 radius: 10.0,
                 color: Color::Yellow,
             },
@@ -95,6 +91,22 @@ impl App {
 
     fn on_tick(&mut self) {
         self.tick_count += 1;
+
+        // bounce the ball by flipping the velocity vector
+        let ball = &self.ball;
+        let playground = self.playground;
+        if ball.x - ball.radius < f64::from(playground.left())
+            || ball.x + ball.radius > f64::from(playground.right())
+        {
+            self.vx = -self.vx;
+        }
+        if ball.y - ball.radius < f64::from(playground.top())
+            || ball.y + ball.radius > f64::from(playground.bottom())
+        {
+            self.vy = -self.vy;
+        }
+        self.ball.x += self.vx;
+        self.ball.y += self.vy;
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -246,22 +258,36 @@ impl App {
     }
 
     fn render_game(&self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from("PONG");
-        let instructions = Line::from(vec!["Main Menu:".into(), "<q>".blue().bold()]);
-        let instructions_p1 = Line::from(vec![" Move:".into(), "<w>/<s>".yellow().bold()]);
-        let instructions_p2 = Line::from(vec![" Move:".into(), "<Up>/<Down>".green().bold()]);
+        // 1. Create the block that surrounds the game area
         let block = Block::bordered()
-            .title(title.centered())
-            .title_bottom(instructions_p1.left_aligned())
-            .title_bottom(instructions_p2.right_aligned())
-            .title_bottom(instructions.centered())
+            .title(Line::from("PONG").centered())
             .border_set(border::THICK);
-        let play_area = Text::from(vec![Line::from("This is the play area")]);
-        Paragraph::new(play_area)
-            .alignment(Alignment::Center)
-            .centered()
-            .block(block)
-            .render(area, buf);
+
+        // 2. Split the game's renderable area by accounting for the block's margins
+        let inner_area = block.inner(area); // The area inside the bordered block
+
+        // 3. Define the bounds for the Canvas (x, y ranges correspond to the playground)
+        let x_bounds = [
+            self.playground.left() as f64,
+            self.playground.right() as f64,
+        ];
+        let y_bounds = [
+            self.playground.top() as f64,
+            self.playground.bottom() as f64,
+        ];
+
+        // 4. Create the canvas and draw the ball
+        let canvas = Canvas::default()
+            .block(block) // Attach the block
+            .marker(self.marker)
+            .paint(|ctx| {
+                ctx.draw(&self.ball); // Draw the ball at its current position
+            })
+            .x_bounds(x_bounds)
+            .y_bounds(y_bounds);
+
+        // 5. Render the canvas within the game's area
+        canvas.render(inner_area, buf);
     }
 }
 

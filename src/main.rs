@@ -11,4 +11,3 @@ fn main() -> io::Result<()> {
     ratatui::restore();
     app_result
 }
-

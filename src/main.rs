@@ -1,4 +1,5 @@
 mod app;
+mod constants;
 use crate::app::App;
 
 use std::io;

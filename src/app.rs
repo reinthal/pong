@@ -1,4 +1,6 @@
 use std::{fs::File, io::Write};
+use std::ops::Add;
+
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer,
@@ -13,8 +15,8 @@ use ratatui::{
     },
     DefaultTerminal, Frame,
 };
-
 use std::io;
+use crate::constants;
 use std::time::{Duration, Instant};
 
 #[derive(PartialEq)]
@@ -23,6 +25,7 @@ pub enum CurrentScreen {
     InGame,
 }
 
+#[derive(PartialEq)]
 pub enum Direction {
     Up,
     Down,
@@ -31,7 +34,8 @@ pub enum Direction {
 
 pub struct Player {
     pub paddle: Rectangle,
-    pub lifes: u32,
+    pub lifes: usize,
+    pub starting_lifes: usize,
     pub direction: Direction,
 }
 
@@ -39,6 +43,7 @@ impl Player {
     pub fn new(x: f64, color: Color) -> Player {
         Player {
             lifes: 3,
+            starting_lifes: 3,
             direction: Direction::Na,
             paddle: Rectangle {
                 x,
@@ -123,11 +128,41 @@ impl App {
         // bounce the ball by flipping the velocity vector
         let ball = &self.ball;
         let playground = self.playground;
-        if ball.x - ball.radius < f64::from(playground.left())
-            || ball.x + ball.radius > f64::from(playground.right())
-        {
+
+        if ball.x - ball.radius < f64::from(playground.left()) {
+            self.p1.lifes -= 1;
+            if self.p1.lifes < 1 {
+                // P2 Wins!
+                self.exit = true; // TODO Implement P2 Wins!
+            } else {
+                // Reset game  and wait 1000ms
+                self.vx = -self.vx;  // TODO: implement reset
+            }
+        }
+
+        if ball.x + ball.radius > f64::from(playground.right()) {
+            self.p2.lifes -= 1;
+            if self.p2.lifes < 1 {
+                // P1 Wins!
+                self.exit = true; // TODO Implement p1 wins!
+            } else {
+                // reset game and wait 1000ms
+                self.vx = -self.vx;  // TODO: implement reset
+
+            }
+        }
+        
+
+        // Implement paddle bounce
+        if (ball.x - ball.radius < f64::from(self.p1.paddle.x)) && 
+        (self.p1.paddle.y < ball.y && ball.y < self.p1.paddle.y + self.p1.paddle.height) {
             self.vx = -self.vx;
         }
+        if ball.x + ball.radius > f64::from(self.p2.paddle.x) &&
+        (self.p2.paddle.y < ball.y && ball.y < self.p2.paddle.y + self.p1.paddle.height) {
+            self.vx = -self.vx;
+        }
+        
         if ball.y - ball.radius < f64::from(playground.top())
             || ball.y + ball.radius > f64::from(playground.bottom())
         {
@@ -164,25 +199,11 @@ impl App {
                 self.logfile.write_all(b"Press event happened!\n")?;
                 self.handle_key_event(key_event)
             }
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Release => {
-                self.logfile.write_all(b"Release event happened!\n")?;
-                self.handle_key_release_event(key_event)
-            }
             _ => {}
         };
         Ok(())
     }
-    fn handle_key_release_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            // p1 stop
-            KeyCode::Char('w') => self.p1.direction = Direction::Na,
-            KeyCode::Char('s') => self.p1.direction = Direction::Na,
-            // p2 stop
-            KeyCode::Up => self.p2.direction = Direction::Na,
-            KeyCode::Down => self.p2.direction = Direction::Na,
-            _ => {}
-        }
-    }
+    
     fn handle_q_event(&mut self) {
         if self.current_screen == CurrentScreen::InGame {
             self.current_screen = CurrentScreen::StartMenu;
@@ -216,11 +237,27 @@ impl App {
         match self.current_screen {
             CurrentScreen::InGame => match key_event.code {
                 // Move p1
-                KeyCode::Char('w') => self.p1.direction = Direction::Up,
-                KeyCode::Char('s') => self.p1.direction = Direction::Down,
+                KeyCode::Char('w') => self.p1.direction = if self.p1.direction == Direction::Down {
+                    Direction::Na
+                } else {
+                    Direction::Up
+                },
+                KeyCode::Char('s') => self.p1.direction = if self.p1.direction == Direction::Up {
+                    Direction::Na
+                } else {
+                    Direction::Down
+                },
                 // Move p2
-                KeyCode::Up => self.p2.direction = Direction::Up,
-                KeyCode::Down => self.p2.direction = Direction::Down,
+                KeyCode::Up => self.p2.direction = if self.p2.direction == Direction::Down {
+                    Direction::Na
+                } else {
+                    Direction::Up
+                },
+                KeyCode::Down => self.p2.direction = if self.p2.direction == Direction::Up {
+                    Direction::Na
+                } else {
+                    Direction::Down
+                },
                 _ => {}
             },
             CurrentScreen::StartMenu => match self.current_selection {
@@ -266,7 +303,6 @@ impl App {
             Span::styled("New Game", Style::default().fg(Color::Yellow)),
         ]));
 
-        // Dynamically style "Exit"
         lines.push(Line::from(vec![
             Span::raw(
                 if matches!(self.current_selection, Some(CurrentSelection::Exit)) {
@@ -288,12 +324,27 @@ impl App {
     }
 
     fn render_game(&self, area: Rect, buf: &mut Buffer) {
+        
+        let mut lifes = String::new();
+        for _i in 0..self.p1.lifes {
+            lifes.push('◉');
+        }
+        let p1_lifes = Line::from(vec![lifes.into()]);
+        
+        lifes = String::new();
+        for _i in 0..self.p2.lifes {
+            lifes.push('◉');
+        }
+        let p2_lifes = Line::from(vec![lifes.into()]);
+        
         // 1. Create the block that surrounds the game area
         let instructions = Line::from(vec!["Main Menu:".into(), "<q>".blue().bold()]);
         let instructions_p1 = Line::from(vec![" Move:".into(), "<w>/<s>".yellow().bold()]);
         let instructions_p2 = Line::from(vec![" Move:".into(), "<Up>/<Down>".green().bold()]);
         let block = Block::bordered()
         .title(Line::from("PONG").centered())
+        .title(p1_lifes.left_aligned())
+        .title(p2_lifes.right_aligned())
         .title_bottom(instructions_p1.left_aligned())
         .title_bottom(instructions_p2.right_aligned())
         .title_bottom(instructions.centered())
